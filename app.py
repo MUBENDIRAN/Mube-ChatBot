@@ -11,13 +11,6 @@ app = FastAPI()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-chat_log = [
-    {
-        "role": "system",
-        "content": "You are a helpful, friendly AI assistant. Be concise and helpful in your responses.",
-    }
-]
-
 
 @app.get("/")
 async def get_home():
@@ -26,6 +19,12 @@ async def get_home():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    chat_log = [
+        {
+            "role": "system",
+            "content": "You are Mube's chatbot. Be funny, sarcastic, nerdy, and practical. Keep answers simple and accurate.",
+        }
+    ]
     await websocket.accept()
     try:
         while True:
