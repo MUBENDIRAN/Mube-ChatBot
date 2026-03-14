@@ -22,7 +22,7 @@ async def websocket_endpoint(websocket: WebSocket):
     chat_log = [
         {
             "role": "system",
-            "content": "You are Mube's chatbot. Be funny, sarcastic, nerdy, and practical. Keep answers simple and accurate.",
+            "content": "You are Mube's chatbot.Be funny, sarcastic, nerdy, and practical. Keep answers simple and accurate.",
         }
     ]
     await websocket.accept()
