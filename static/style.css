@@ -1,0 +1,121 @@
+:root {
+    --primary: #10a37f;
+    --user-bg: #10a37f;
+    --bot-bg: #f7f7f7;
+    --dark-bg: #1a1a1a;
+    --dark-msg: #2d2d2d;
+}
+
+html.dark-mode {
+    --user-bg: #10a37f;
+    --bot-bg: #2d2d2d;
+    color-scheme: dark;
+}
+
+html.dark-mode body {
+    background-color: var(--dark-bg) !important;
+    color: #ececf1;
+}
+
+html.dark-mode .bg-light {
+    background-color: var(--dark-msg) !important;
+    border-color: #404040 !important;
+}
+
+html.dark-mode .form-control {
+    background-color: var(--dark-msg) !important;
+    color: #ececf1 !important;
+    border-color: #404040 !important;
+}
+
+html.dark-mode .btn-light {
+    background-color: var(--dark-msg) !important;
+    color: #ececf1 !important;
+    border-color: #404040 !important;
+}
+
+html.dark-mode .text-muted {
+    color: #999 !important;
+}
+
+.user-msg {
+    display: inline-block;
+    max-width: 70%;
+    padding: 0.75rem 1rem;
+    background-color: var(--user-bg);
+    color: white;
+    border-radius: 1rem 0.25rem 1rem 1rem;
+    word-wrap: break-word;
+    margin-bottom: 0.5rem;
+}
+
+.bot-msg {
+    display: inline-block;
+    max-width: 70%;
+    padding: 0.75rem 1rem;
+    background-color: var(--bot-bg);
+    color: inherit;
+    border-radius: 0.25rem 1rem 1rem 1rem;
+    word-wrap: break-word;
+    margin-bottom: 0.5rem;
+}
+
+.message-group {
+    display: flex;
+    margin-bottom: 0.5rem;
+    animation: slideIn 0.2s ease-out;
+}
+
+.message-group.user {
+    justify-content: flex-end;
+}
+
+.message-group.bot {
+    justify-content: flex-start;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.loading-dots {
+    display: inline;
+}
+
+.loading-dots span {
+    animation: bounce 1.4s infinite;
+    display: inline-block;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 50%;
+    background-color: currentColor;
+    margin: 0 0.2rem;
+}
+
+.loading-dots span:nth-child(1) { animation-delay: 0s; }
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce {
+    0%, 80%, 100% { opacity: 0.5; }
+    40% { opacity: 1; }
+}
+
+@media (max-width: 768px) {
+    .user-msg, .bot-msg {
+        max-width: 85%;
+    }
+}
+
+@media (max-width: 480px) {
+    .user-msg, .bot-msg {
+        max-width: 90%;
+    }
+}
