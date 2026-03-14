@@ -1,3 +1,4 @@
 .env
 /fastapivenv
-
+/.idea
+/__pycache__
