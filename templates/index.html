@@ -15,27 +15,49 @@
         <span class="aurora orb-3"></span>
     </div>
 
-    <div class="chat-app position-relative d-flex flex-column vh-100 overflow-hidden mx-auto w-100 px-2 px-sm-3">
-        <section id="heroSection" class="hero-section text-center px-3">
-            <h1 class="display-5 fw-semibold m-0">How can I help?</h1>
-        </section>
+    <div class="chat-layout">
+        <!-- Sidebar Toggle Button -->
+        <button id="toggleSidebar" class="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
 
-        <main class="flex-grow-1 overflow-auto py-3 d-none px-1" id="chatMessages"></main>
-
-        <div class="w-100" id="composerDock">
-            <div class="border border-secondary-subtle rounded-pill p-2 composer-panel">
-                <form id="chatForm" class="d-flex align-items-end gap-2">
-                    <textarea
-                        id="messageInput"
-                        class="form-control border-0 bg-transparent text-light shadow-none rounded-pill px-3"
-                        placeholder="Message Mube..."
-                        rows="1"
-                        maxlength="2000"
-                        style="resize: none; max-height: 120px;"></textarea>
-                    <button type="submit" class="btn btn-primary rounded-pill px-3" id="sendBtn">Send</button>
-                </form>
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <button id="newChatBtn" class="btn btn-primary w-100 mb-3">
+                    <span>+ New Chat</span>
+                </button>
             </div>
-            <small class="text-secondary d-block text-end mt-1"><span id="charCount">0</span>/2000</small>
+            <div class="sidebar-content">
+                <div id="chatList" class="chat-list">
+                    <!-- Chats will be populated here -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <div class="chat-app">
+            <section id="heroSection" class="hero-section">
+                <h1>How can I help?</h1>
+            </section>
+
+            <main id="chatMessages"></main>
+
+            <div id="composerDock">
+                <div>
+                    <div class="composer-panel">
+                        <form id="chatForm" class="d-flex align-items-end gap-2">
+                            <textarea
+                                id="messageInput"
+                                class="form-control border-0 bg-transparent text-light shadow-none rounded-pill px-3"
+                                placeholder="Message Mube..."
+                                rows="1"
+                                maxlength="2000"
+                                style="resize: none; max-height: 120px;"></textarea>
+                            <button type="submit" class="btn btn-primary rounded-pill px-3" id="sendBtn">Send</button>
+                        </form>
+                    </div>
+                    <small class="text-secondary d-block text-end mt-1"><span id="charCount">0</span>/2000</small>
+                </div>
+            </div>
         </div>
     </div>
 

@@ -1,8 +1,17 @@
+// Generate or retrieve persistent user ID
+let userId = localStorage.getItem("user_id");
+if (!userId) {
+    userId = crypto.randomUUID();
+    localStorage.setItem("user_id", userId);
+}
+
 let ws = null;
 let isConnected = false;
 let reconnectAttempts = 0;
 let reconnectDelay = 2000;
 const maxReconnectAttempts = 10;
+
+let currentChatId = null;
 
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
@@ -10,6 +19,10 @@ const chatMessages = document.getElementById("chatMessages");
 const chatForm = document.getElementById("chatForm");
 const charCount = document.getElementById("charCount");
 const heroSection = document.getElementById("heroSection");
+const newChatBtn = document.getElementById("newChatBtn");
+const chatList = document.getElementById("chatList");
+const toggleSidebarBtn = document.getElementById("toggleSidebar");
+const sidebar = document.getElementById("sidebar");
 
 const scrollToLatest = () => {
     requestAnimationFrame(() => {
@@ -111,6 +124,13 @@ const appendStream = (chunk) => {
     scrollToLatest();
 };
 
+const clearChat = () => {
+    chatMessages.innerHTML = "";
+    document.body.classList.remove("chat-mode");
+    document.body.classList.add("initial-mode");
+    heroSection.removeAttribute("aria-hidden");
+};
+
 const setInputState = (disabled) => {
     sendBtn.disabled = disabled;
     messageInput.disabled = disabled;
@@ -174,13 +194,37 @@ const connectWebSocket = () => {
     };
 };
 
-const sendMessage = () => {
+const sendMessage = async () => {
     const text = messageInput.value.trim();
     if (!text || !isConnected) {
         if (!isConnected) {
             alert("Not connected to server. Trying to reconnect...");
         }
         return;
+    }
+
+    // Auto-create chat if one doesn't exist
+    if (!currentChatId) {
+        try {
+            const res = await fetch("/new_chat", { 
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    user_id: userId
+                })
+            });
+            const data = await res.json();
+            currentChatId = data.chat_id;
+            
+            // Refresh sidebar with new chat
+            await loadChatList();
+        } catch (error) {
+            console.error("Failed to create chat:", error);
+            alert("Failed to create chat. Please try again.");
+            return;
+        }
     }
 
     enterChatMode();
@@ -190,7 +234,103 @@ const sendMessage = () => {
     messageInput.style.height = "auto";
     charCount.textContent = "0";
     setInputState(true);
-    ws.send(JSON.stringify({ content: text }));
+    
+    // Send message with chat_id and user_id
+    ws.send(JSON.stringify({ 
+        user_id: userId,
+        chat_id: currentChatId,
+        content: text 
+    }));
+};
+
+const createNewChat = async () => {
+    try {
+        const response = await fetch("/new_chat", { 
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                user_id: userId
+            })
+        });
+        const data = await response.json();
+        currentChatId = data.chat_id;
+        clearChat();
+        await loadChatList();
+        setInputState(false);
+    } catch (error) {
+        console.error("Failed to create new chat:", error);
+        alert("Failed to create new chat");
+    }
+};
+
+const loadChatList = async () => {
+    try {
+        const response = await fetch(`/chats/${userId}`);
+        const chats = await response.json();
+        
+        chatList.innerHTML = "";
+        
+        if (chats.length === 0) {
+            chatList.innerHTML = '<div class="text-secondary p-3 text-center small">No chats yet</div>';
+            return;
+        }
+        
+        chats.forEach(chat => {
+            const chatItem = document.createElement("button");
+            chatItem.className = "chat-item btn btn-link";
+            chatItem.type = "button";
+            chatItem.textContent = chat.title;
+            chatItem.title = chat.title;
+            chatItem.dataset.chatId = chat.chat_id;
+            
+            if (chat.chat_id === currentChatId) {
+                chatItem.classList.add("active");
+            }
+            
+            chatItem.addEventListener("click", () => loadChatMessages(chat.chat_id));
+            chatList.appendChild(chatItem);
+        });
+    } catch (error) {
+        console.error("Failed to load chats:", error);
+    }
+};
+
+const loadChatMessages = async (chatId) => {
+    try {
+        const response = await fetch(`/chat/${chatId}`);
+        
+        if (!response.ok) {
+            alert("Failed to load chat");
+            return;
+        }
+        
+        const messages = await response.json();
+        
+        clearChat();
+        currentChatId = chatId;
+        
+        // Update active state in sidebar
+        document.querySelectorAll(".chat-item").forEach(item => {
+            item.classList.remove("active");
+            if (item.dataset.chatId === chatId) {
+                item.classList.add("active");
+            }
+        });
+        
+        if (messages.length > 0) {
+            enterChatMode();
+            messages.forEach(msg => {
+                addMessage(msg.role, msg.content);
+            });
+        }
+        
+        setInputState(false);
+    } catch (error) {
+        console.error("Failed to load chat messages:", error);
+        alert("Failed to load chat");
+    }
 };
 
 messageInput.addEventListener("input", () => {
@@ -235,4 +375,21 @@ chatMessages.addEventListener("click", async (event) => {
     }
 });
 
-window.addEventListener("load", connectWebSocket);
+newChatBtn.addEventListener("click", createNewChat);
+
+toggleSidebarBtn.addEventListener("click", () => {
+    sidebar.classList.toggle("closed");
+});
+
+window.addEventListener("load", async () => {
+    connectWebSocket();
+    await loadChatList();
+    // Auto-create first chat if none exist
+    setTimeout(async () => {
+        const response = await fetch("/chats");
+        const chats = await response.json();
+        if (chats.length === 0) {
+            await createNewChat();
+        }
+    }, 500);
+});
