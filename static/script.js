@@ -23,6 +23,37 @@ const newChatBtn = document.getElementById("newChatBtn");
 const chatList = document.getElementById("chatList");
 const toggleSidebarBtn = document.getElementById("toggleSidebar");
 const sidebar = document.getElementById("sidebar");
+const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+const mobileBreakpoint = window.matchMedia("(max-width: 768px)");
+
+const isMobileView = () => mobileBreakpoint.matches;
+
+const syncSidebarBackdrop = () => {
+    if (!sidebarBackdrop) {
+        return;
+    }
+
+    const showBackdrop = isMobileView() && !sidebar.classList.contains("closed");
+    sidebarBackdrop.classList.toggle("visible", showBackdrop);
+};
+
+const setSidebarOpen = (isOpen) => {
+    sidebar.classList.toggle("closed", !isOpen);
+    toggleSidebarBtn.setAttribute("aria-expanded", String(isOpen));
+    syncSidebarBackdrop();
+};
+
+let previousIsMobile = isMobileView();
+
+const syncSidebarForViewport = () => {
+    const nowMobile = isMobileView();
+    if (nowMobile !== previousIsMobile) {
+        setSidebarOpen(!nowMobile);
+        previousIsMobile = nowMobile;
+    } else {
+        syncSidebarBackdrop();
+    }
+};
 
 const scrollToLatest = () => {
     requestAnimationFrame(() => {
@@ -258,6 +289,9 @@ const createNewChat = async () => {
         currentChatId = data.chat_id;
         clearChat();
         await loadChatList();
+        if (isMobileView()) {
+            setSidebarOpen(false);
+        }
         setInputState(false);
     } catch (error) {
         console.error("Failed to create new chat:", error);
@@ -278,18 +312,46 @@ const loadChatList = async () => {
         }
         
         chats.forEach(chat => {
-            const chatItem = document.createElement("button");
-            chatItem.className = "chat-item btn btn-link";
-            chatItem.type = "button";
-            chatItem.textContent = chat.title;
-            chatItem.title = chat.title;
+            const chatItem = document.createElement("div");
+            chatItem.className = "chat-item";
+            chatItem.dataset.id = chat.chat_id;
             chatItem.dataset.chatId = chat.chat_id;
+            
+            const titleSpan = document.createElement("span");
+            titleSpan.className = "chat-title";
+            titleSpan.textContent = chat.title;
+            titleSpan.title = chat.title;
+            
+            const menuBtn = document.createElement("button");
+            menuBtn.className = "chat-menu-btn";
+            menuBtn.type = "button";
+            menuBtn.textContent = "⋯";
+            
+            const menu = document.createElement("div");
+            menu.className = "chat-menu";
+            
+            const renameBtn = document.createElement("button");
+            renameBtn.className = "rename-chat";
+            renameBtn.type = "button";
+            renameBtn.textContent = "Rename";
+            
+            const deleteBtn = document.createElement("button");
+            deleteBtn.className = "delete-chat";
+            deleteBtn.type = "button";
+            deleteBtn.textContent = "Delete";
+            
+            menu.appendChild(renameBtn);
+            menu.appendChild(deleteBtn);
+            
+            chatItem.appendChild(titleSpan);
+            chatItem.appendChild(menuBtn);
+            chatItem.appendChild(menu);
             
             if (chat.chat_id === currentChatId) {
                 chatItem.classList.add("active");
             }
             
-            chatItem.addEventListener("click", () => loadChatMessages(chat.chat_id));
+            titleSpan.addEventListener("click", () => loadChatMessages(chat.chat_id));
             chatList.appendChild(chatItem);
         });
     } catch (error) {
@@ -325,7 +387,11 @@ const loadChatMessages = async (chatId) => {
                 addMessage(msg.role, msg.content);
             });
         }
-        
+
+        if (isMobileView()) {
+            setSidebarOpen(false);
+        }
+
         setInputState(false);
     } catch (error) {
         console.error("Failed to load chat messages:", error);
@@ -378,15 +444,80 @@ chatMessages.addEventListener("click", async (event) => {
 newChatBtn.addEventListener("click", createNewChat);
 
 toggleSidebarBtn.addEventListener("click", () => {
-    sidebar.classList.toggle("closed");
+    const shouldOpen = sidebar.classList.contains("closed");
+    setSidebarOpen(shouldOpen);
+});
+
+sidebarBackdrop?.addEventListener("click", () => {
+    setSidebarOpen(false);
+});
+
+window.addEventListener("resize", syncSidebarForViewport);
+
+// Menu toggle handler
+document.addEventListener("click", (e) => {
+    if (e.target.classList.contains("chat-menu-btn")) {
+        const menu = e.target.nextElementSibling;
+        const isVisible = menu.style.display === "flex";
+        
+        // Close all other menus
+        document.querySelectorAll(".chat-menu").forEach(m => {
+            m.style.display = "none";
+        });
+        
+        // Toggle current menu
+        menu.style.display = isVisible ? "none" : "flex";
+        e.stopPropagation();
+    } else if (!e.target.closest(".chat-menu")) {
+        // Close menu if clicking outside
+        document.querySelectorAll(".chat-menu").forEach(m => {
+            m.style.display = "none";
+        });
+    }
+});
+
+// Rename chat handler
+document.addEventListener("click", (e) => {
+    if (e.target.classList.contains("rename-chat")) {
+        const chatId = e.target.closest(".chat-item").dataset.id;
+        const newName = prompt("Rename chat to:");
+        
+        if (!newName) return;
+        
+        fetch(`/chat/${chatId}/rename`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: newName }),
+        }).then(() => loadChatList());
+    }
+});
+
+// Delete chat handler
+document.addEventListener("click", (e) => {
+    if (e.target.classList.contains("delete-chat")) {
+        const chatId = e.target.closest(".chat-item").dataset.id;
+        
+        if (!confirm("Delete this chat?")) return;
+        
+        fetch(`/chat/${chatId}`, {
+            method: "DELETE",
+        }).then(() => {
+            if (currentChatId === chatId) {
+                currentChatId = null;
+                clearChat();
+            }
+            loadChatList();
+        });
+    }
 });
 
 window.addEventListener("load", async () => {
+    setSidebarOpen(!isMobileView());
     connectWebSocket();
     await loadChatList();
     // Auto-create first chat if none exist
     setTimeout(async () => {
-        const response = await fetch("/chats");
+        const response = await fetch(`/chats/${userId}`);
         const chats = await response.json();
         if (chats.length === 0) {
             await createNewChat();

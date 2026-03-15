@@ -15,47 +15,41 @@
         <span class="aurora orb-3"></span>
     </div>
 
-    <div class="chat-layout">
-        <!-- Sidebar Toggle Button -->
-        <button id="toggleSidebar" class="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+    <div class="app">
+        <div class="topbar">
+            <button id="toggleSidebar" type="button" aria-label="Toggle chat sidebar" aria-expanded="true">☰</button>
+            <button id="newChatBtn" type="button" aria-label="Create new chat">+ New Chat</button>
+        </div>
 
-        <!-- Sidebar -->
-        <aside id="sidebar" class="sidebar">
-            <div class="sidebar-header">
-                <button id="newChatBtn" class="btn btn-primary w-100 mb-3">
-                    <span>+ New Chat</span>
-                </button>
-            </div>
-            <div class="sidebar-content">
+        <div class="app-container">
+            <aside id="sidebar" class="sidebar">
                 <div id="chatList" class="chat-list">
                     <!-- Chats will be populated here -->
                 </div>
-            </div>
-        </aside>
+            </aside>
 
-        <!-- Main Chat Area -->
-        <div class="chat-app">
-            <section id="heroSection" class="hero-section">
-                <h1>How can I help?</h1>
-            </section>
+            <div id="sidebarBackdrop" class="sidebar-backdrop" aria-hidden="true"></div>
 
-            <main id="chatMessages"></main>
+            <div class="main" id="chatApp">
+                <section id="heroSection" class="hero-section">
+                    <h1>How can I help?</h1>
+                </section>
 
-            <div id="composerDock">
-                <div>
+                <main id="chatMessages"></main>
+
+                <div id="composerDock">
                     <div class="composer-panel">
-                        <form id="chatForm" class="d-flex align-items-end gap-2">
+                        <form id="chatForm">
                             <textarea
                                 id="messageInput"
-                                class="form-control border-0 bg-transparent text-light shadow-none rounded-pill px-3"
                                 placeholder="Message Mube..."
                                 rows="1"
                                 maxlength="2000"
                                 style="resize: none; max-height: 120px;"></textarea>
-                            <button type="submit" class="btn btn-primary rounded-pill px-3" id="sendBtn">Send</button>
+                            <button type="submit" id="sendBtn">Send</button>
                         </form>
+                        <small class="char-counter"><span id="charCount">0</span>/2000</small>
                     </div>
-                    <small class="text-secondary d-block text-end mt-1"><span id="charCount">0</span>/2000</small>
                 </div>
             </div>
         </div>
