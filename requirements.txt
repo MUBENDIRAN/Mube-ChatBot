@@ -3,13 +3,12 @@ uvicorn[standard]==0.27.1
 groq==0.13.0
 python-dotenv==1.0.1
 python-multipart==0.0.9
-
 langchain==0.2.16
 langchain-core==0.2.38
 langchain-community==0.2.16
 langchain-groq==0.1.4
 langchain-text-splitters==0.2.2
-
 faiss-cpu==1.8.0
 pypdf==4.2.0
 python-docx==1.1.0
+docx2txt==0.8
