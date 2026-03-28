@@ -20,34 +20,24 @@ from database import (
     get_user_chats,
 )
 
-from langchain_classic.chains import create_history_aware_retriever, create_retrieval_chain
-from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.vectorstores import FAISS
-from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader,UnstructuredFileLoader
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
+from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
-
-
-
-
-
-
-
 
 
 load_dotenv()
 app = FastAPI()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-embeddings = HuggingFaceEmbeddings(
-    model_name="all-MiniLM-L6-v2",
-    model_kwargs={"device": "cpu"}
-)
+embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
 # LLM for langchain RAG
 llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0.2)
@@ -191,8 +181,6 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_text(json.dumps({"type": "error", "content": str(e)}))
 
 
-
-
 @app.post("/load_document/")
 async def load_document_upload(file: UploadFile = File(...), session_id: str = Form(...)):
     """Upload and process a document file (PDF, DOCX, TXT) for RAG. Supports multiple documents by merging."""
@@ -285,6 +273,8 @@ async def load_document_upload(file: UploadFile = File(...), session_id: str = F
             }
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error processing document: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
     finally:
@@ -366,9 +356,7 @@ async def query_document(body: dict = Body(...)):
         
         # Save to database if user_id and chat_id are provided
         if user_id and chat_id:
-            # Save user message
             save_message(chat_id, "user", prompt)
-            # Save bot response
             save_message(chat_id, "assistant", answer)
         
         return {"answer": answer}
