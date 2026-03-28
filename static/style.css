@@ -150,7 +150,7 @@ body {
     cursor: pointer;
     transition: background-color 0.2s ease, border-color 0.2s ease;
     border: 1px solid transparent;
-    color: #b3bfd1;
+    color: #e2e8f0;
     font-size: 0.9rem;
     position: relative;
     display: flex;
@@ -306,7 +306,7 @@ body:not(.chat-mode) .main {
     overflow-x: hidden;
     width: min(100%, var(--content-max-width));
     margin: 0 auto;
-    padding: 2rem var(--content-gutter) 7rem var(--content-gutter);
+    padding: 2rem var(--content-gutter) 10rem var(--content-gutter);
     position: relative;
     z-index: 5;
     scroll-padding-top: 40px;
@@ -396,6 +396,31 @@ body:not(.chat-mode) .main {
     gap: 0.5rem;
 }
 
+.attach-btn {
+    background: rgba(47, 109, 255, 0.12);
+    border: 1px solid rgba(47, 109, 255, 0.3);
+    border-radius: 10px;
+    padding: 8px 12px;
+    color: #5b9eff;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-size: 1.3rem;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    font-weight: 500;
+}
+
+.attach-btn:hover {
+    background: rgba(47, 109, 255, 0.25);
+    border-color: rgba(47, 109, 255, 0.5);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(47, 109, 255, 0.3);
+}
+
 #messageInput {
     flex: 1;
     border: none;
@@ -472,6 +497,83 @@ body:not(.chat-mode) .main {
 
 body.chat-mode .hero-section {
     display: none;
+}
+
+/* Document Mode Indicator */
+.document-mode-indicator {
+    display: flex;
+    flex-direction: column;
+    background: rgba(47, 109, 255, 0.2);
+    border: 1px solid rgba(47, 109, 255, 0.5);
+    border-radius: 8px;
+    padding: 0.6rem 0.85rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.88rem;
+    color: #ffffff;
+    font-weight: 500;
+}
+
+.document-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+#documentFileName {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 0.5rem;
+    color: #e8f0ff;
+    font-weight: 500;
+}
+
+.document-list {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.doc-item {
+    padding: 0.4rem 0.5rem;
+    margin-bottom: 0.3rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: #d0e0ff;
+    transition: background 0.2s ease;
+}
+
+.doc-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.doc-item:last-child {
+    margin-bottom: 0;
+}
+
+.exit-document-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    padding: 0.3rem 0.85rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.exit-document-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.02);
 }
 
 @keyframes slideIn {
@@ -565,7 +667,7 @@ body.chat-mode .hero-section {
     }
 
     #chatMessages {
-        padding: 2.2rem 0.75rem calc(6.4rem + env(safe-area-inset-bottom));
+        padding: 2.2rem 0.75rem calc(9rem + env(safe-area-inset-bottom));
     }
 
     .user-msg,

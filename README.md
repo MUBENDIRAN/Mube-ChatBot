@@ -1,200 +1,100 @@
-# Mube's Chatbot - FastAPI & Groq LLM
+# Mube's Chatbot - FastAPI & Groq LLM with RAG
 
-A full-featured chatbot application built with FastAPI, WebSocket streaming, SQLite persistence, and Groq LLM API integration. Features multi-chat support with intelligent memory management and responsive UI for desktop and mobile.
+A powerful, full-featured chatbot application built with FastAPI, WebSocket streaming, SQLite persistence, and Groq LLM API integration. This project features a sophisticated RAG (Retrieval-Augmented Generation) system for document-based Q&A, multi-chat support, and a responsive modern UI.
+
+## 🚀 Project Workflow
+
+The application operates through three primary layers: Frontend (UI), Backend (FastAPI), and AI Engine (Groq + LangChain).
+
+### 1. Conversation Workflow (Standard Chat)
+- **User Identification**: Every browser/device is assigned a persistent UUID in `localStorage`, allowing for device-specific chat history without formal authentication.
+- **WebSocket Connection**: Real-time communication is handled via WebSockets (`/ws`), enabling low-latency, character-by-character streaming of responses.
+- **Lazy Database Initialization**: To prevent clutter, a chat session is only created in the SQLite database (`chat.db`) when the first message is sent.
+- **Sliding Window Memory**: The backend maintains context by retrieving only the most recent 6 messages from the database, optimizing performance and reducing token costs by approximately 85%.
+- **Response Generation**: Messages are processed by the Groq API (using `llama-3.1-8b-instant`) with a customized system personality.
+
+### 2. Document Workflow (RAG - Retrieval-Augmented Generation)
+- **Document Ingestion**: Users can upload PDF, DOCX, or TXT files.
+- **Processing**: 
+    - Files are temporary stored, then loaded and split into smaller chunks (1000 characters with 200 overlap) using `RecursiveCharacterTextSplitter`.
+    - Chunks are converted into vector embeddings using `HuggingFaceEmbeddings` (`all-MiniLM-L6-v2`).
+- **Vector Storage**: Embeddings are stored in a FAISS vector database locally on the server under the `vectors/` directory.
+- **Intelligent Retrieval**: When a user queries a document:
+    - A "History-Aware Retriever" rephrases the user's question to be standalone based on previous chat context.
+    - The most relevant document chunks are retrieved from FAISS.
+    - The LLM generates a concise answer based strictly on the retrieved context.
+
+### 3. Data Management Workflow
+- **Persistence**: All chat metadata and message history are stored in SQLite.
+- **Management**: Users can rename or delete chats via the sidebar menu.
+- **Auto-Naming**: New chats are automatically named based on the first few words of the initial user message.
 
 ## ✨ Features
 
-### 🤖 Core AI Features
-- **Groq LLM Integration**: Real-time streaming responses with Groq API
-- **Sliding Window Memory**: Intelligent context management (6 most recent messages)
-- **~85% Token Reduction**: Optimized memory window reduces token usage significantly
-- **System Prompt**: Fresh system context with each request for consistent personality
-
-### 💾 Data Persistence
-- **SQLite Database**: Persistent chat storage with automatic initialization
-- **Multi-Chat Support**: Create, manage, and switch between multiple conversations
-- **Chat Lifecycle**: Lazy creation (no DB clutter), auto-naming from first message
-- **Chat Management**: Delete and rename conversations
-
-### 👥 User Management
-- **Device Isolation**: Browser-generated UUID stored in localStorage
-- **User Filtering**: Each device/browser gets unique user_id
-- **Multi-Device Support**: One person can use multiple devices with separate chat histories
-- **No Authentication Required**: Suitable for personal/dev use (add auth for production)
-
-### 🎨 UI/UX Features
-- **Multi-Chat Sidebar**: Quick access to all conversations
-- **Sidebar Toggle**: Collapse/expand on all screen sizes for more chat space
-- **Responsive Design**: Works perfectly on desktop, tablet, and mobile
-- **Real-Time Streaming**: See bot responses appear character-by-character
-- **Message History**: Load previous conversations instantly
-- **Auto-Chat Creation**: Start chatting immediately without "New Chat" button
-- **Smooth Animations**: Professional 0.3s transitions
-
-### 🔧 Technical Features
-- **WebSocket Streaming**: Real-time message streaming without polling
-- **Lazy Chat Creation**: Chat only inserted when first message arrives
-- **Efficient Queries**: Filtered queries using EXISTS subqueries
-- **Error Handling**: Comprehensive error handling on frontend and backend
-- **No Breaking Changes**: Fully backward compatible
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Python 3.8+
-- pip (Python package manager)
-- Groq API key (get at https://console.groq.com)
-
-### Installation
-
-1. **Clone the repository**
-```bash
-git clone <repo-url>
-cd chatbot-fastapi
-```
-
-2. **Create virtual environment**
-```bash
-python3 -m venv fastapivenv
-source fastapivenv/bin/activate  # On Windows: fastapivenv\Scripts\activate
-```
-
-3. **Install dependencies**
-```bash
-pip install -r requirements.txt
-```
-
-4. **Configure Groq API**
-```bash
-export GROQ_API_KEY="your-api-key-here"
-```
-
-5. **Run the application**
-```bash
-python app.py
-```
-
-The app will be available at `http://localhost:8000`
+- **Real-Time Streaming**: Interactive responses that appear as they are generated.
+- **Full Multi-Document Support**: Upload multiple documents (PDF, DOCX, TXT) to a single session and query them collectively. Documents are automatically merged into a unified knowledge base, allowing cross-document queries.
+- **Responsive UI**: A polished, mobile-friendly interface with a collapsible sidebar and smooth transitions.
+- **Code Highlighting**: Intelligent rendering of code blocks with a "Copy" feature.
+- **Modern Tech Stack**: FastAPI, LangChain, Groq, FAISS, and Vanilla CSS.
 
 ## 📁 Project Structure
 
 ```
 chatbot-fastapi/
-├── app.py                 # FastAPI application, WebSocket handler, endpoints
-├── database.py            # SQLite database setup and utility functions
+├── app.py                 # Main FastAPI app (WebSockets, RAG logic, API endpoints)
+├── database.py            # SQLite schema and data persistence logic
 ├── requirements.txt       # Python dependencies
-├── chat.db               # SQLite database (auto-created)
+├── chat.db                # SQLite database (auto-generated)
+├── static/                # Frontend assets
+│   ├── script.js          # Chat logic, WebSocket handling, UI interactions
+│   ├── style.css          # Modern, responsive styling
+│   └── ...
 ├── templates/
-│   └── index.html        # Frontend HTML
-├── static/
-│   ├── script.js         # Frontend JavaScript (user ID, WebSocket, chat logic)
-│   ├── style.css         # Styling and responsive design
-│   └── mube-chat-bot-logo.jpeg
-└── README.md             # This file
+│   └── index.html         # Main application UI
+├── vectors/               # Local storage for FAISS vector databases (per session)
+└── temp_uploads/          # Temporary storage for uploaded documents during processing
 ```
 
-## 🔌 API Endpoints
+## 🔧 Installation & Setup
 
-### HTTP Endpoints
+1. **Clone & Navigate**
+   ```bash
+   git clone <repo-url>
+   cd chatbot-fastapi
+   ```
 
-**POST /new_chat**
-- Creates a new chat session
-- Request body: `{"user_id": "uuid"}`
-- Response: `{"chat_id": "uuid"}`
-- Note: Chat is not inserted in DB until first message arrives
+2. **Environment Setup**
+   ```bash
+   python3 -m venv fastapivenv
+   source fastapivenv/bin/activate
+   pip install -r requirements.txt
+   ```
 
-**GET /chats/{user_id}**
-- Retrieves all chats for a specific user
-- Returns only chats with messages (no empty chats)
-- Response: `[{"chat_id": "...", "title": "..."}, ...]`
+3. **Configure API Keys**
+   Create a `.env` file in the root directory:
+   ```env
+   GROQ_API_KEY=your_groq_api_key_here
+   ```
 
-**GET /chat/{chat_id}**
-- Retrieves message history for a specific chat
-- Response: `[{"role": "user", "content": "..."}, ...]`
+4. **Run Application**
+   ```bash
+   python app.py
+   ```
+   Access the app at `http://localhost:8000`.
 
-**DELETE /chat/{chat_id}**
-- Deletes a chat and all its messages
-- Response: `{"status": "deleted"}`
+## 🛠 Tech Stack
 
-**PUT /chat/{chat_id}/rename**
-- Updates chat title
-- Request body: `{"title": "new title"}`
-- Response: Updated chat metadata
-
-### WebSocket Endpoint
-
-**GET /ws**
-- WebSocket connection for real-time chat
-- Message format: `{"user_id": "uuid", "chat_id": "uuid", "content": "message"}`
-- Streams response tokens in real-time
-
-## 💾 Database Schema
-
-### chats table
-```sql
-CREATE TABLE chats (
-    chat_id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    title TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)
-```
-
-### messages table
-```sql
-CREATE TABLE messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chat_id TEXT,
-    role TEXT,
-    content TEXT,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(chat_id) REFERENCES chats(chat_id)
-)
-```
-
-## 🧪 Testing
-
-### Manual Testing
-1. Open `http://localhost:8000` in your browser
-2. Chat should work immediately (auto-creates first chat)
-3. Switch between chats using sidebar
-4. Toggle sidebar with ☰ button
-5. Open another browser tab/profile to test user isolation
-
-### Test Scenarios
-- Single user, multiple devices ✅
-- Multiple browser profiles ✅
-- Chat switching ✅
-- Message history loading ✅
-- Sidebar toggle ✅
-- Real-time streaming ✅
-
-## 📊 Performance
-
-### Optimizations
-- **Sliding Window Memory**: 85% token reduction vs full history
-- **Lazy Chat Creation**: No database clutter from abandoned chats
-- **Efficient Queries**: Uses EXISTS subqueries to filter empty chats
-- **Hardware-Accelerated CSS**: Smooth animations at 60fps
-
-### Metrics
-- **Response Time**: ~1-3 seconds (depends on Groq API)
-- **Database**: Minimal size with smart filtering
-- **Frontend**: <50KB total JavaScript + CSS
-- **Network**: ~36 bytes per user_id overhead
-
-## 🚀 Deployment
-
-### Render.com Deployment
-1. Push code to GitHub
-2. Connect repository to Render
-3. Set environment variable: `GROQ_API_KEY`
-4. Deploy (auto-creates database)
-
-### Local Deployment
-```bash
-python app.py  # Runs on localhost:8000
-```
+- **Backend**: FastAPI (Python 3.12+)
+- **LLM**: Groq (Llama 3.1 8B)
+- **RAG Framework**: LangChain
+- **Embeddings**: HuggingFace (sentence-transformers)
+- **Vector Store**: FAISS
+- **Database**: SQLite
+- **Frontend**: Vanilla JS, CSS3, HTML5
 
 
-**Happy Chatting! 🚀**
+## WorkFlow
+![alt text](Mube-chatbot(workflow).jpeg)
+
+## Video Demo
+

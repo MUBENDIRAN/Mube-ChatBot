@@ -39,7 +39,18 @@
 
                 <div id="composerDock">
                     <div class="composer-panel">
+                        <div id="documentModeIndicator" class="document-mode-indicator" style="display: none;">
+                            <div class="document-info">
+                                <span id="documentFileName">📄 Document Mode Active</span>
+                                <div id="documentList" class="document-list" style="display: none;"></div>
+                            </div>
+                            <button type="button" id="exitDocumentMode" class="exit-document-btn">Exit</button>
+                        </div>
                         <form id="chatForm">
+                            <input type="file" id="fileInput" accept=".pdf,.docx,.txt" multiple hidden>
+                            <button type="button" id="attachBtn" class="attach-btn" title="Attach document (PDF, DOCX, TXT)">
+                                📎
+                            </button>
                             <textarea
                                 id="messageInput"
                                 placeholder="Message Mube..."

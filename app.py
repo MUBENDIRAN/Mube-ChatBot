@@ -1,11 +1,12 @@
 from groq import Groq
-from fastapi import FastAPI, WebSocket, Body
+from fastapi import FastAPI, WebSocket, Body, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 import os
 from dotenv import load_dotenv
 import json
 from uuid import uuid4
+import hashlib
 from database import (
     init_db,
     save_message,
@@ -19,10 +20,54 @@ from database import (
     get_user_chats,
 )
 
+from langchain_classic.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.vectorstores import FAISS
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader,UnstructuredFileLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_groq import ChatGroq
+
+
+
+
+
+
+
+
+
 load_dotenv()
 app = FastAPI()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+embeddings = HuggingFaceEmbeddings(
+    model_name="all-MiniLM-L6-v2",
+    model_kwargs={"device": "cpu"}
+)
+
+# LLM for langchain RAG
+llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0.2)
+
+# Vectorstore cache and session history
+vectorstore_cache = {}
+session_store = {}
+document_hash_map = {}  # Maps document hashes to session IDs
+
+
+def get_file_hash(file_content: bytes) -> str:
+    """Calculate MD5 hash of file content."""
+    return hashlib.md5(file_content).hexdigest()
+
+
+def get_session_history(session_id: str) -> BaseChatMessageHistory:
+    """Get or create chat message history for a session."""
+    if session_id not in session_store:
+        session_store[session_id] = ChatMessageHistory()
+    return session_store[session_id]
 
 
 @app.on_event("startup")
@@ -123,7 +168,7 @@ async def websocket_endpoint(websocket: WebSocket):
             response = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
                 messages=chat_log,
-                temperature=0.7,
+                temperature=0.5,
                 top_p=0.9,
                 max_tokens=1000,
                 stream=True,
@@ -144,6 +189,191 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except Exception as e:
         await websocket.send_text(json.dumps({"type": "error", "content": str(e)}))
+
+
+
+
+@app.post("/load_document/")
+async def load_document_upload(file: UploadFile = File(...), session_id: str = Form(...)):
+    """Upload and process a document file (PDF, DOCX, TXT) for RAG. Supports multiple documents by merging."""
+    print(f"Received document for processing: {file.filename}")
+    os.makedirs("temp_uploads", exist_ok=True)
+    os.makedirs("vectors", exist_ok=True)
+
+    # Check file type
+    file_ext = file.filename.lower().split('.')[-1]
+    allowed_extensions = ['pdf', 'docx', 'txt']
+    
+    if file_ext not in allowed_extensions:
+        return JSONResponse(
+            status_code=400, 
+            content={"error": f"Only {', '.join(allowed_extensions).upper()} files are allowed."}
+        )
+
+    # Read file content
+    file_content = await file.read()
+    
+    # Calculate file hash to check if we've seen this document before
+    file_hash = get_file_hash(file_content)
+    
+    # Save uploaded file temporarily
+    file_location = f"temp_uploads/{file.filename}"
+    with open(file_location, "wb") as f:
+        f.write(file_content)
+
+    try:
+        # Load document based on file type
+        if file_ext == 'pdf':
+            loader = PyPDFLoader(file_location)
+        elif file_ext == 'docx':
+            loader = Docx2txtLoader(file_location)
+        elif file_ext == 'txt':
+            loader = TextLoader(file_location, encoding='utf-8')
+        
+        documents = loader.load()
+        
+        # Add filename to metadata for tracking
+        for doc in documents:
+            doc.metadata['source_filename'] = file.filename
+        
+        # Split into text chunks
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        splits = text_splitter.split_documents(documents)
+        
+        # Check if session already has documents (merge scenario)
+        if session_id in vectorstore_cache:
+            # MERGE: Add new document to existing vectorstore
+            print(f"Merging {file.filename} with existing documents in session {session_id}")
+            existing_vectorstore = vectorstore_cache[session_id]
+            
+            # Create new vectorstore from new documents
+            new_vectorstore = FAISS.from_documents(splits, embeddings)
+            
+            # Merge the two vectorstores
+            existing_vectorstore.merge_from(new_vectorstore)
+            
+            # Save merged vectorstore
+            vectorstore_path = f"vectors/{session_id}"
+            existing_vectorstore.save_local(vectorstore_path)
+            
+            vectorstore_cache[session_id] = existing_vectorstore
+            
+            print(f"Successfully merged {file_ext.upper()} into existing collection")
+            return {
+                "message": f"Added {file.filename} to existing documents",
+                "filename": file.filename,
+                "file_type": file_ext.upper(),
+                "merged": True
+            }
+        else:
+            # FIRST DOCUMENT: Create new vectorstore
+            print(f"Creating new document collection for session {session_id}")
+            vectorstore = FAISS.from_documents(splits, embeddings)
+            vectorstore_path = f"vectors/{session_id}"
+            os.makedirs(vectorstore_path, exist_ok=True)
+            vectorstore.save_local(vectorstore_path)
+
+            # Cache vectorstore
+            vectorstore_cache[session_id] = vectorstore
+            
+            print(f"Successfully processed {file_ext.upper()}")
+            return {
+                "message": "Uploaded successfully",
+                "filename": file.filename,
+                "file_type": file_ext.upper(),
+                "merged": False
+            }
+
+    except Exception as e:
+        print(f"Error processing document: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        # Clean up temp file
+        if os.path.exists(file_location):
+            os.remove(file_location)
+
+
+@app.post("/query_document/")
+async def query_document(body: dict = Body(...)):
+    """Query the uploaded document using RAG."""
+    session_id = body.get("session_id")
+    prompt = body.get("prompt")
+    user_id = body.get("user_id")
+    chat_id = body.get("chat_id")
+    
+    if not session_id or not prompt:
+        return JSONResponse(status_code=400, content={"error": "session_id and prompt are required."})
+    
+    vectorstore_path = f"vectors/{session_id}"
+
+    # If vectorstore not cached, attempt to load from disk
+    if session_id not in vectorstore_cache:
+        if os.path.exists(vectorstore_path):
+            try:
+                vectorstore = FAISS.load_local(
+                    vectorstore_path,
+                    embeddings,
+                    allow_dangerous_deserialization=True
+                )
+                vectorstore_cache[session_id] = vectorstore
+            except Exception as e:
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": f"Failed to load vectorstore: {str(e)}"}
+                )
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Please load a PDF first for this session."}
+            )
+
+    retriever = vectorstore_cache[session_id].as_retriever()
+
+    # Create a prompt to rephrase context-dependent queries
+    contextualize_q_prompt = ChatPromptTemplate.from_messages([
+        ("system", "Given a chat history and the latest user question which might reference context, formulate a standalone question."),
+        MessagesPlaceholder("chat_history"),
+        ("human", "{input}"),
+    ])
+    history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
+
+    # Final answering prompt using context
+    qa_prompt = ChatPromptTemplate.from_messages([
+        ("system",
+         "Use the context below to answer the question **briefly and clearly in short**. Limit your response to key information. If unsure, say you don't know.\n\n{context}"),
+        MessagesPlaceholder("chat_history"),
+        ("human", "{input}"),
+    ])
+    document_chain = create_stuff_documents_chain(llm, qa_prompt)
+    rag_chain = create_retrieval_chain(history_aware_retriever, document_chain)
+
+    # Combine retrieval with conversation memory
+    conversational_rag_chain = RunnableWithMessageHistory(
+        rag_chain,
+        lambda sid: get_session_history(sid),
+        input_messages_key="input",
+        history_messages_key="chat_history",
+        output_messages_key="answer"
+    )
+
+    # Generate response
+    try:
+        response = conversational_rag_chain.invoke(
+            {"input": prompt},
+            config={"configurable": {"session_id": session_id}},
+        )
+        answer = response["answer"]
+        
+        # Save to database if user_id and chat_id are provided
+        if user_id and chat_id:
+            # Save user message
+            save_message(chat_id, "user", prompt)
+            # Save bot response
+            save_message(chat_id, "assistant", answer)
+        
+        return {"answer": answer}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")

@@ -298,9 +298,9 @@ def build_prompt(chat_id: str, user_message: str) -> list:
         List of message dicts ready for the LLM API
     """
     system_prompt = {
-        "role": "system",
-        "content": "You are Mube's personal AI assistant. Be funny, sarcastic, nerdy, and practical. Keep answers simple and accurate.",
-    }
+    "role": "system",
+    "content": "Your name is Mube's Personal AI Assistant. Be a smart, slightly sarcastic and nerdy assistant. Be helpful first and funny second. Keep answers clear, practical, concise, and accurate. Use light humor occasionally without affecting clarity. Do not overdo sarcasm or jokes. If the question is serious, respond seriously. Always prioritize usefulness over personality."
+}
     
     recent_history = get_recent_history(chat_id, limit=6)
     

@@ -12,6 +12,9 @@ let reconnectDelay = 2000;
 const maxReconnectAttempts = 10;
 
 let currentChatId = null;
+let documentMode = false;
+let documentSessionId = null;
+let documentFileNames = [];  // Array to track multiple files
 
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
@@ -25,6 +28,12 @@ const toggleSidebarBtn = document.getElementById("toggleSidebar");
 const sidebar = document.getElementById("sidebar");
 const sidebarBackdrop = document.getElementById("sidebarBackdrop");
 const mobileBreakpoint = window.matchMedia("(max-width: 768px)");
+const attachBtn = document.getElementById("attachBtn");
+const fileInput = document.getElementById("fileInput");
+const documentModeIndicator = document.getElementById("documentModeIndicator");
+const documentFileNameSpan = document.getElementById("documentFileName");
+const documentListDiv = document.getElementById("documentList");
+const exitDocumentModeBtn = document.getElementById("exitDocumentMode");
 
 const isMobileView = () => mobileBreakpoint.matches;
 
@@ -227,10 +236,69 @@ const connectWebSocket = () => {
 
 const sendMessage = async () => {
     const text = messageInput.value.trim();
-    if (!text || !isConnected) {
-        if (!isConnected) {
-            alert("Not connected to server. Trying to reconnect...");
+    if (!text) {
+        return;
+    }
+
+    // Document Mode - Query the uploaded document
+    if (documentMode && documentSessionId) {
+        addMessage("user", text);
+        const botBubble = addMessage("bot", "");
+        messageInput.value = "";
+        messageInput.style.height = "auto";
+        charCount.textContent = "0";
+        setInputState(true);
+
+        try {
+            // Auto-create chat if one doesn't exist
+            if (!currentChatId) {
+                const res = await fetch("/new_chat", { 
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        user_id: userId
+                    })
+                });
+                const data = await res.json();
+                currentChatId = data.chat_id;
+                await loadChatList();
+            }
+
+            const response = await fetch("/query_document/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    session_id: documentSessionId,
+                    prompt: text,
+                    user_id: userId,
+                    chat_id: currentChatId
+                })
+            });
+
+            const data = await response.json();
+            
+            if (response.ok) {
+                botBubble.dataset.rawContent = data.answer;
+                renderAssistantContent(botBubble, data.answer);
+            } else {
+                botBubble.textContent = `❌ Error: ${data.error || "Failed to query document"}`;
+            }
+        } catch (error) {
+            botBubble.textContent = `❌ Error: ${error.message}`;
+        } finally {
+            setInputState(false);
+            scrollToLatest();
         }
+        return;
+    }
+
+    // Normal Chat Mode
+    if (!isConnected) {
+        alert("Not connected to server. Trying to reconnect...");
         return;
     }
 
@@ -288,6 +356,14 @@ const createNewChat = async () => {
         const data = await response.json();
         currentChatId = data.chat_id;
         clearChat();
+        
+        // Exit document mode when creating a new chat
+        documentMode = false;
+        documentSessionId = null;
+        documentFileName = "";
+        documentModeIndicator.style.display = "none";
+        messageInput.placeholder = "Message Mube...";
+        
         await loadChatList();
         if (isMobileView()) {
             setSidebarOpen(false);
@@ -372,6 +448,13 @@ const loadChatMessages = async (chatId) => {
         
         clearChat();
         currentChatId = chatId;
+        
+        // Exit document mode when switching chats
+        documentMode = false;
+        documentSessionId = null;
+        documentFileName = "";
+        documentModeIndicator.style.display = "none";
+        messageInput.placeholder = "Message Mube...";
         
         // Update active state in sidebar
         document.querySelectorAll(".chat-item").forEach(item => {
@@ -523,4 +606,123 @@ window.addEventListener("load", async () => {
             await createNewChat();
         }
     }, 500);
+});
+
+// File attachment functionality
+attachBtn?.addEventListener("click", () => {
+    fileInput.click();
+});
+
+fileInput?.addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+        for (const file of files) {
+            await uploadDocument(file);
+        }
+    }
+});
+
+exitDocumentModeBtn?.addEventListener("click", () => {
+    documentMode = false;
+    documentSessionId = null;
+    documentFileNames = [];
+    documentModeIndicator.style.display = "none";
+    messageInput.placeholder = "Message Mube...";
+});
+
+async function uploadDocument(file) {
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    const allowedTypes = ['pdf', 'docx', 'txt'];
+    
+    if (!allowedTypes.includes(fileExt)) {
+        alert(`Please upload a PDF, DOCX, or TXT file. You selected: ${fileExt.toUpperCase()}`);
+        fileInput.value = "";
+        return;
+    }
+
+    const formData = new FormData();
+    // Reuse existing session ID if in document mode, otherwise create new one
+    const sessionId = documentSessionId || crypto.randomUUID();
+    formData.append("file", file);
+    formData.append("session_id", sessionId);
+
+    // Show upload indicator
+    const uploadMsg = addMessage("bot", `📤 Uploading ${file.name}...`);
+    setInputState(true);
+
+    try {
+        const response = await fetch("/load_document/", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            const isMerged = data.merged || false;
+            
+            if (isMerged) {
+                uploadMsg.textContent = `✅ ${data.filename} added to existing documents! Ask questions across all uploaded files.`;
+            } else {
+                uploadMsg.textContent = `✅ ${data.filename} uploaded successfully! You can now ask questions about it.`;
+            }
+            
+            // Enable document mode
+            documentMode = true;
+            documentSessionId = sessionId;
+            
+            // Track multiple filenames
+            if (!documentFileNames.includes(file.name)) {
+                documentFileNames.push(file.name);
+            }
+            
+            // Update UI to show all uploaded documents
+            updateDocumentIndicator();
+            
+            fileInput.value = "";
+            setInputState(false);
+        } else {
+            uploadMsg.textContent = `❌ Error: ${data.error || "Failed to upload document"}`;
+            setInputState(false);
+        }
+    } catch (error) {
+        uploadMsg.textContent = `❌ Error: ${error.message}`;
+        setInputState(false);
+    }
+    
+    scrollToLatest();
+}
+
+function updateDocumentIndicator() {
+    if (documentFileNames.length === 0) {
+        documentModeIndicator.style.display = "none";
+        documentListDiv.style.display = "none";
+        messageInput.placeholder = "Message Mube...";
+        return;
+    }
+    
+    if (documentFileNames.length === 1) {
+        documentFileNameSpan.textContent = `📄 ${documentFileNames[0]}`;
+        documentListDiv.style.display = "none";
+        messageInput.placeholder = `Ask questions about ${documentFileNames[0]}...`;
+    } else {
+        documentFileNameSpan.textContent = `📄 ${documentFileNames.length} documents loaded (click to view)`;
+        documentFileNameSpan.style.cursor = "pointer";
+        messageInput.placeholder = `Ask questions about your ${documentFileNames.length} documents...`;
+        
+        // Populate document list
+        documentListDiv.innerHTML = documentFileNames.map((name, idx) => 
+            `<div class="doc-item">${idx + 1}. ${name}</div>`
+        ).join('');
+    }
+    
+    documentModeIndicator.style.display = "flex";
+}
+
+// Toggle document list visibility on click
+documentFileNameSpan?.addEventListener("click", () => {
+    if (documentFileNames.length > 1) {
+        const isVisible = documentListDiv.style.display === "block";
+        documentListDiv.style.display = isVisible ? "none" : "block";
+    }
 });
