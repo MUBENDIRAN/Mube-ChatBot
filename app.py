@@ -28,16 +28,54 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
-from langchain_community.embeddings import SentenceTransformerEmbeddings
+from langchain_core.embeddings import Embeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
+import requests
 
 
 load_dotenv()
 app = FastAPI()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+
+
+class HFInferenceEmbeddings(Embeddings):
+    """Direct HuggingFace Inference API embeddings — bypasses broken langchain wrapper."""
+
+    def __init__(self, api_key: str, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
+        self.api_url = f"https://router.huggingface.co/hf-inference/models/{model_name}/pipeline/feature-extraction"
+        self.headers = {"Authorization": f"Bearer {api_key}"}
+
+    def _query(self, texts: list) -> list:
+        response = requests.post(
+            self.api_url,
+            headers=self.headers,
+            json={"inputs": texts, "options": {"wait_for_model": True}},
+        )
+        result = response.json()
+        if isinstance(result, dict) and "error" in result:
+            raise ValueError(f"HuggingFace API error: {result['error']}")
+        return result
+
+    def embed_documents(self, texts: list) -> list:
+        return self._query(texts)
+
+    def embed_query(self, text: str) -> list:
+        result = self._query([text])
+        return result[0]
+
+
+# Lazy load embeddings — only created when first document is uploaded
+_embeddings = None
+
+def get_embeddings():
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = HFInferenceEmbeddings(
+            api_key=os.getenv("HUGGINGFACEHUB_API_TOKEN"),
+        )
+    return _embeddings
 
 # LLM for langchain RAG
 llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0.2)
@@ -235,7 +273,7 @@ async def load_document_upload(file: UploadFile = File(...), session_id: str = F
             existing_vectorstore = vectorstore_cache[session_id]
             
             # Create new vectorstore from new documents
-            new_vectorstore = FAISS.from_documents(splits, embeddings)
+            new_vectorstore = FAISS.from_documents(splits, get_embeddings())
             
             # Merge the two vectorstores
             existing_vectorstore.merge_from(new_vectorstore)
@@ -256,7 +294,7 @@ async def load_document_upload(file: UploadFile = File(...), session_id: str = F
         else:
             # FIRST DOCUMENT: Create new vectorstore
             print(f"Creating new document collection for session {session_id}")
-            vectorstore = FAISS.from_documents(splits, embeddings)
+            vectorstore = FAISS.from_documents(splits, get_embeddings())
             vectorstore_path = f"vectors/{session_id}"
             os.makedirs(vectorstore_path, exist_ok=True)
             vectorstore.save_local(vectorstore_path)
@@ -273,8 +311,6 @@ async def load_document_upload(file: UploadFile = File(...), session_id: str = F
             }
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         print(f"Error processing document: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
     finally:
@@ -302,7 +338,7 @@ async def query_document(body: dict = Body(...)):
             try:
                 vectorstore = FAISS.load_local(
                     vectorstore_path,
-                    embeddings,
+                    get_embeddings(),
                     allow_dangerous_deserialization=True
                 )
                 vectorstore_cache[session_id] = vectorstore
