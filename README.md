@@ -90,6 +90,4 @@ Open: `http://localhost:8000`
 
 ## ▶️ YouTube Link
 
-- Demo: `https://www.youtube.com/watch?v=YOUR_VIDEO_ID`
-
-Replace `YOUR_VIDEO_ID` with your published demo video ID.
+- Demo: https://youtu.be/FQVB1vDsxVg
