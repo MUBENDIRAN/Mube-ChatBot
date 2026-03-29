@@ -44,19 +44,39 @@ class HFInferenceEmbeddings(Embeddings):
     """Direct HuggingFace Inference API embeddings — bypasses broken langchain wrapper."""
 
     def __init__(self, api_key: str, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
-        self.api_url = f"https://router.huggingface.co/hf-inference/models/{model_name}/pipeline/feature-extraction"
+        if not api_key:
+            raise ValueError("HUGGINGFACEHUB_API_TOKEN is missing. Please set it in your .env file.")
+        self.api_urls = [
+            f"https://router.huggingface.co/hf-inference/models/{model_name}/pipeline/feature-extraction",
+            f"https://api-inference.huggingface.co/models/{model_name}",
+        ]
         self.headers = {"Authorization": f"Bearer {api_key}"}
 
     def _query(self, texts: list) -> list:
-        response = requests.post(
-            self.api_url,
-            headers=self.headers,
-            json={"inputs": texts, "options": {"wait_for_model": True}},
+        payload = {"inputs": texts, "options": {"wait_for_model": True}}
+        last_error = None
+
+        for api_url in self.api_urls:
+            try:
+                response = requests.post(
+                    api_url,
+                    headers=self.headers,
+                    json=payload,
+                    timeout=30,
+                )
+                response.raise_for_status()
+                result = response.json()
+                if isinstance(result, dict) and "error" in result:
+                    raise ValueError(f"HuggingFace API error from {api_url}: {result['error']}")
+                return result
+            except requests.exceptions.RequestException as exc:
+                last_error = exc
+                continue
+
+        raise ValueError(
+            "Failed to reach Hugging Face inference endpoints. "
+            f"Last error: {last_error}"
         )
-        result = response.json()
-        if isinstance(result, dict) and "error" in result:
-            raise ValueError(f"HuggingFace API error: {result['error']}")
-        return result
 
     def embed_documents(self, texts: list) -> list:
         return self._query(texts)

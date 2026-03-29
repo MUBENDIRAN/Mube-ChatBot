@@ -360,8 +360,9 @@ const createNewChat = async () => {
         // Exit document mode when creating a new chat
         documentMode = false;
         documentSessionId = null;
-        documentFileName = "";
+        documentFileNames = [];
         documentModeIndicator.style.display = "none";
+        documentListDiv.style.display = "none";
         messageInput.placeholder = "Message Mube...";
         
         await loadChatList();
@@ -452,8 +453,9 @@ const loadChatMessages = async (chatId) => {
         // Exit document mode when switching chats
         documentMode = false;
         documentSessionId = null;
-        documentFileName = "";
+        documentFileNames = [];
         documentModeIndicator.style.display = "none";
+        documentListDiv.style.display = "none";
         messageInput.placeholder = "Message Mube...";
         
         // Update active state in sidebar
