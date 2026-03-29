@@ -390,8 +390,10 @@ async def query_document(body: dict = Body(...)):
         )
         answer = response["answer"]
         
-        # Save to database if user_id and chat_id are provided
+        # Ensure chat exists before saving document-mode messages
         if user_id and chat_id:
+            if not chat_exists(chat_id):
+                create_chat_with_title(chat_id, user_id, prompt)
             save_message(chat_id, "user", prompt)
             save_message(chat_id, "assistant", answer)
         
